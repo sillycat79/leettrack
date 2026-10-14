@@ -2,7 +2,12 @@
 
 A full-stack tracker for LeetCode / online assessment practice. I log every problem I do (topic, difficulty, time, whether I actually solved it) and it tells me which topics I'm weakest at so I know what to grind next.
 
-<!-- Add a screenshot here: ![LeetTrack dashboard](docs/screenshot.png) -->
+![LeetTrack dashboard: stats, logging form, activity heatmap and weakest topics](docs/dashboard.png)
+
+![LeetTrack history table with search and filters](docs/history.png)
+
+<!-- Live demo: add your Render link here once it's deployed -->
+
 
 ## Features
 
