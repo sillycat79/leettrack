@@ -88,6 +88,7 @@
   /* layout */
   --page-max: 1120px;
   --control-h: 40px;
+  --card-pad: var(--space-5);
   --icon-sm: 16px;
   --control-sm: 32px;
   --z-tip: 10;
@@ -149,7 +150,7 @@ a:hover { color: var(--accent-text); text-decoration-color: var(--accent-line); 
    ========================================================================== */
 .hero { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: var(--space-4); }
 .hero-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
-.hero-main > * { padding: var(--space-5); }
+.hero-main > * { padding: var(--card-pad); }
 .hero-next { border-left: 1px solid var(--border); display: flex; flex-direction: column; }
 
 .eyebrow { color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
@@ -166,7 +167,7 @@ a:hover { color: var(--accent-text); text-decoration-color: var(--accent-line); 
 .next-action { margin-top: auto; padding-top: var(--space-4); }
 
 .hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--border); margin: 0; }
-.hero-stats > div { padding: var(--space-4) var(--space-5); border-left: 1px solid var(--border); }
+.hero-stats > div { padding: var(--space-4) var(--card-pad); border-left: 1px solid var(--border); }
 .hero-stats > div:first-child { border-left: 0; }
 .hero-stats dt { color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
 .hero-stats dd { margin: var(--space-2) 0 0; display: flex; align-items: baseline; gap: var(--space-2); }
@@ -180,7 +181,7 @@ a:hover { color: var(--accent-text); text-decoration-color: var(--accent-line); 
    ========================================================================== */
 .layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: var(--space-4); margin-bottom: var(--space-4); align-items: start; }
 .side { display: flex; flex-direction: column; gap: var(--space-4); }
-.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--space-5); }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--card-pad); }
 .card-head { margin-bottom: var(--space-4); }
 h2 { font-size: var(--text-md); line-height: var(--leading-tight); font-weight: 600; letter-spacing: var(--tracking-tight); margin: 0; }
 .hint { color: var(--text-subtle); font-size: var(--text-xs); margin: var(--space-1) 0 0; }
@@ -307,14 +308,14 @@ select {
    ========================================================================== */
 .list-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
 .filters { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-.table-wrap { overflow-x: auto; margin: 0 calc(-1 * var(--space-5)) calc(-1 * var(--space-5)); }
+.table-wrap { overflow-x: auto; margin: 0 calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)); }
 table { width: 100%; border-collapse: collapse; }
 th {
   text-align: left; font: 500 var(--text-xs) var(--mono); letter-spacing: var(--tracking-caps); text-transform: uppercase;
   color: var(--text-subtle); padding: var(--space-3); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
 }
-th:first-child, td:first-child { padding-left: var(--space-5); }
-th:last-child, td:last-child { padding-right: var(--space-5); }
+th:first-child, td:first-child { padding-left: var(--card-pad); }
+th:last-child, td:last-child { padding-right: var(--card-pad); }
 td { padding: var(--space-3); border-bottom: 1px solid var(--border); vertical-align: top; }
 tbody tr { transition: background var(--dur-fast); }
 tbody tr:hover { background: var(--surface-2); }
@@ -324,6 +325,7 @@ tr:last-child td { border-bottom: 0; }
 td.date, td.minutes { color: var(--text-subtle); font: var(--text-xs) / 21px var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
 td.minutes { color: var(--text-muted); }
 .note { color: var(--text-subtle); font-size: var(--text-xs); margin-top: var(--space-1); }
+.m-unit { display: none; }
 
 /* difficulty: neutral 3-step meter + label (pink stays out of the table) */
 .diff { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-muted); white-space: nowrap; }
@@ -356,12 +358,12 @@ td.row-actions { white-space: nowrap; text-align: right; padding-top: var(--spac
 .sk-bar { height: 4px; margin-top: var(--space-2); }
 .sk-heatmap { height: 140px; border-radius: var(--r-sm); }
 .sk-list { display: flex; flex-direction: column; gap: var(--space-5); }
-.sk-table { display: flex; flex-direction: column; margin: 0 calc(-1 * var(--space-5)) calc(-1 * var(--space-5)); border-top: 1px solid var(--border); }
-.sk-row { display: flex; gap: var(--space-6); align-items: center; padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
+.sk-table { display: flex; flex-direction: column; margin: 0 calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)); border-top: 1px solid var(--border); }
+.sk-row { display: flex; gap: var(--space-6); align-items: center; padding: var(--space-4) var(--card-pad); border-bottom: 1px solid var(--border); }
 .sk-row:last-child { border-bottom: 0; }
 
 .toasts {
-  position: fixed; left: 50%; bottom: var(--space-5); transform: translateX(-50%); z-index: var(--z-toast);
+  position: fixed; left: 50%; bottom: calc(var(--space-5) + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: var(--z-toast);
   display: flex; flex-direction: column; gap: var(--space-2); width: min(440px, calc(100vw - 2 * var(--space-4)));
 }
 .toast {
@@ -389,11 +391,64 @@ td.row-actions { white-space: nowrap; text-align: right; padding-top: var(--spac
    ========================================================================== */
 @media (max-width: 860px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
+
+  /* history becomes a stacked list once the table can't breathe */
+  .table-wrap { overflow-x: visible; }
+  thead { display: none; }
+  table, tbody { display: block; }
+  tbody { border-top: 1px solid var(--border); }
+  tbody tr {
+    display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "title title title actions" "topic topic topic date" "diff status mins mins";
+    column-gap: var(--space-4); row-gap: var(--space-1);
+    padding: var(--space-3) var(--space-2) var(--space-3) var(--card-pad); border-bottom: 1px solid var(--border);
+  }
+  tbody tr:last-child { border-bottom: 0; }
+  tbody td, tbody td:first-child, tbody td:last-child { padding: 0; border: 0; }
+  tbody td:nth-child(1) { grid-area: date; justify-self: end; padding-right: var(--space-2); }
+  tbody td:nth-child(2) { grid-area: title; font-weight: 500; align-self: center; }
+  tbody td:nth-child(3) { grid-area: topic; color: var(--text-muted); font-size: var(--text-xs); line-height: 21px; }
+  tbody td:nth-child(4) { grid-area: diff; }
+  tbody td:nth-child(5) { grid-area: status; }
+  tbody td:nth-child(6) { grid-area: mins; }
+  td.row-actions { grid-area: actions; display: flex; padding: 0; }
+  .m-unit { display: inline; }
+  tbody tr.editing { box-shadow: inset 2px 0 0 var(--accent); }
+  tbody tr.editing td:first-child { box-shadow: none; }
 }
+@media (min-width: 641px) and (max-width: 860px) {
+  .side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* touch: every target at least 40px */
+@media (max-width: 640px), (pointer: coarse) {
+  .chip, .seg-btn, .icon-btn, .toast-action, .btn-sm { min-height: var(--control-h); }
+  .icon-btn { width: var(--control-h); height: var(--control-h); }
+}
+
 @media (max-width: 640px) {
+  :root { --card-pad: var(--space-4); }
   .page { padding: var(--space-6) var(--space-4) var(--space-8); }
+  .top { margin-bottom: var(--space-5); }
+
+  /* iOS zooms into inputs under 16px */
+  input, select, textarea { font-size: var(--text-md); }
+
+  /* hero: stack streak over next-up; stats as Solved | Topics, then difficulty full width */
   .hero-main { grid-template-columns: minmax(0, 1fr); }
   .hero-next { border-left: 0; border-top: 1px solid var(--border); }
+  .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-stats > div:nth-child(1) { grid-area: 1 / 1; }
+  .hero-stats > div:nth-child(2) { grid-area: 2 / 1 / 3 / 3; border-left: 0; border-top: 1px solid var(--border); }
+  .hero-stats > div:nth-child(3) { grid-area: 1 / 2; }
+  .streak-value { font-size: var(--text-3xl); }
+
   .grid2 { grid-template-columns: minmax(0, 1fr); }
   .span2 { grid-column: auto; }
+  .form-actions .btn { flex: 1; }
+
+  /* history: filters on a grid, table becomes a stacked list */
+  .list-head { flex-direction: column; align-items: stretch; }
+  .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filters input, .filters select:first-of-type { grid-column: 1 / -1; }
+
 }

@@ -456,7 +456,7 @@ export function ProblemTable({ problems, editingId, onEdit, onDelete }) {
               <td>{p.topic}</td>
               <td><Difficulty value={p.difficulty} /></td>
               <td><Status value={p.status} /></td>
-              <td className="minutes">{p.minutes ?? "—"}</td>
+              <td className="minutes">{p.minutes ?? "—"}{p.minutes != null && <span className="m-unit"> min</span>}</td>
               <td className="row-actions">
                 <button type="button" className="icon-btn" title="Edit" aria-label={`Edit ${p.title}`} onClick={() => onEdit(p)}>
                   <Pencil className="icon" aria-hidden="true" />
