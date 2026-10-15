@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Check, RotateCcw } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { AlertCircle, Check, Pencil, RotateCcw, Trash2, X } from "lucide-react";
 import { localDate } from "./api.js";
 
 export const DEFAULT_TOPICS = [
@@ -9,6 +9,48 @@ export const DEFAULT_TOPICS = [
 ];
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const longDate = (key) =>
+  new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+
+/* ---------- feedback primitives ---------- */
+
+export const Skeleton = ({ className = "" }) => <div className={`skeleton ${className}`} aria-hidden="true" />;
+
+export function EmptyState({ title, body, action }) {
+  return (
+    <div className="empty">
+      <p className="empty-title">{title}</p>
+      <p className="empty-body">{body}</p>
+      {action && <button type="button" className="btn btn-ghost" onClick={action.onClick}>{action.label}</button>}
+    </div>
+  );
+}
+
+export function Toasts({ toasts, onDismiss }) {
+  return (
+    <div className="toasts" role="status" aria-live="polite">
+      {toasts.map((t) => {
+        const Icon = t.tone === "error" ? AlertCircle : Check;
+        return (
+          <div key={t.id} className={`toast ${t.tone}`}>
+            <Icon className="icon" strokeWidth={2} aria-hidden="true" />
+            <span className="toast-msg">{t.message}</span>
+            {t.action && (
+              <button type="button" className="toast-action" onClick={() => { t.action.run(); onDismiss(t.id); }}>
+                {t.action.label}
+              </button>
+            )}
+            <button type="button" className="icon-btn" aria-label="Dismiss" onClick={() => onDismiss(t.id)}>
+              <X className="icon" aria-hidden="true" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- summary ---------- */
 
 /** Streak and the next topic to practice come first; totals sit underneath. */
 export function Hero({ stats, onPractice }) {
@@ -25,7 +67,9 @@ export function Hero({ stats, onPractice }) {
           <div className={`streak-value ${streak.current ? "" : "zero"}`}>
             {streak.current}<span className="streak-unit">{streak.current === 1 ? "day" : "days"}</span>
           </div>
-          <div className="hero-meta">Best {plural(streak.longest, "day")}</div>
+          <div className="hero-meta">
+            {streak.longest ? `Best ${plural(streak.longest, "day")}` : "Log a problem today to start one"}
+          </div>
         </div>
         <div className="hero-next">
           <div className="eyebrow">Next up</div>
@@ -72,41 +116,113 @@ export function Hero({ stats, onPractice }) {
   );
 }
 
-/** GitHub-style activity grid for the last N weeks. */
-export function Heatmap({ perDay, weeks = 16 }) {
-  const today = new Date();
-  const start = new Date(today);
-  start.setDate(start.getDate() - (weeks * 7 - 1) - today.getDay()); // align to Sunday
+export function HeroSkeleton() {
+  return (
+    <section className="hero" aria-busy="true" aria-label="Loading summary">
+      <div className="hero-main">
+        <div>
+          <Skeleton className="sk-line sk-short" />
+          <Skeleton className="sk-display" />
+          <Skeleton className="sk-line sk-short" />
+        </div>
+        <div className="hero-next">
+          <Skeleton className="sk-line sk-short" />
+          <Skeleton className="sk-title" />
+          <Skeleton className="sk-line" />
+        </div>
+      </div>
+      <div className="hero-stats">
+        {[0, 1, 2].map((i) => (
+          <div key={i}><Skeleton className="sk-line sk-short" /><Skeleton className="sk-stat" /></div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
-  const cells = [];
-  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
-    const key = localDate(d);
-    cells.push({ key, count: perDay[key] || 0 });
+/* ---------- activity ---------- */
+
+/** GitHub-style activity grid. Hover a day, or focus the grid and use arrow keys. */
+export function Heatmap({ perDay, weeks = 16 }) {
+  const cells = useMemo(() => {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() - (weeks * 7 - 1) - today.getDay()); // align to Sunday
+    const out = [];
+    for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+      const key = localDate(d);
+      out.push({ key, count: perDay[key] || 0, month: d.getMonth(), day: d.getDate() });
+    }
+    return out;
+  }, [perDay, weeks]);
+  const [active, setActive] = useState(null);
+
+  const cols = Math.ceil(cells.length / 7);
+  const months = Array.from({ length: cols }, (_, c) => {
+    const first = cells[c * 7];
+    const changed = c === 0 ? first.day <= 14 : first.month !== cells[(c - 1) * 7].month;
+    return changed ? new Date(2000, first.month).toLocaleDateString(undefined, { month: "short" }) : "";
+  });
+
+  function onKeyDown(e) {
+    const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[e.key];
+    if (e.key === "Escape") return setActive(null);
+    if (!step) return;
+    e.preventDefault();
+    setActive((a) => (a == null ? cells.length - 1 : Math.min(cells.length - 1, Math.max(0, a + step))));
   }
-  const level = (c) => Math.min(c, 4);
+
+  const cur = active != null ? cells[active] : null;
+  const col = active != null ? Math.floor(active / 7) : 0;
+  const edge = col < 2 ? "tip-start" : col > cols - 3 ? "tip-end" : "";
 
   return (
-    <>
-      <div className="heatmap" aria-label="Practice activity">
-        {cells.map((c) => (
+    <div>
+      <div className="months" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }} aria-hidden="true">
+        {months.map((m, i) => <span key={i}>{m}</span>)}
+      </div>
+      <div
+        className="heatmap"
+        role="group"
+        tabIndex={0}
+        aria-label="Practice activity. Use the arrow keys to read each day."
+        onKeyDown={onKeyDown}
+        onFocus={() => active == null && setActive(cells.length - 1)}
+        onBlur={() => setActive(null)}
+        onMouseLeave={() => setActive(null)}
+      >
+        {cells.map((c, i) => (
           <div
             key={c.key}
-            className={`cell l${level(c.count)}`}
-            title={`${c.key}: ${plural(c.count, "problem")}`}
+            className={`cell l${Math.min(c.count, 4)} ${i === active ? "active" : ""}`}
+            onMouseEnter={() => setActive(i)}
           />
         ))}
+        {cur && (
+          <div
+            className={`tip ${edge}`}
+            role="status"
+            style={{ left: `${((col + 0.5) / cols) * 100}%`, top: `${((active % 7) / 7) * 100}%` }}
+          >
+            <strong>{cur.count ? plural(cur.count, "problem") : "No problems"}</strong> · {longDate(cur.key)}
+          </div>
+        )}
       </div>
       <div className="legend" aria-hidden="true">
         <span>Less</span>
         {[0, 1, 2, 3, 4].map((l) => <div key={l} className={`cell l${l}`} />)}
         <span>More</span>
       </div>
-    </>
+    </div>
   );
 }
 
+/* ---------- weak topics ---------- */
+
 export function WeakTopics({ topics }) {
-  if (!topics.length) return <p className="muted">Log a few problems to see your weak spots.</p>;
+  if (!topics.length) {
+    return <p className="muted">No weak spots yet. Log a few problems and the topics that slow you down rank here.</p>;
+  }
   return (
     <ol className="weak">
       {topics.slice(0, 6).map((t, i) => (
@@ -126,10 +242,70 @@ export function WeakTopics({ topics }) {
   );
 }
 
+export function ListSkeleton({ rows = 4 }) {
+  return (
+    <div className="sk-list" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i}><Skeleton className="sk-line" /><Skeleton className="sk-bar" /></div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- form ---------- */
+
 const EMPTY = {
   title: "", url: "", topic: "", difficulty: "Medium",
   status: "Solved", minutes: "", notes: "", solved_on: "",
 };
+
+function validate(f) {
+  const e = {};
+  if (!f.title.trim()) e.title = "Add the problem name.";
+  if (!f.topic.trim()) e.topic = "Pick a topic, or choose + Other to add your own.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f.solved_on)) e.solved_on = "Pick the day you did it.";
+  if (f.minutes !== "" && !(Number(f.minutes) >= 0)) e.minutes = "Use a number of minutes, like 25.";
+  return e;
+}
+
+function FieldError({ name, errors }) {
+  if (!errors[name]) return null;
+  return (
+    <span id={`${name}-error`} className="field-error">
+      <AlertCircle className="icon" aria-hidden="true" />{errors[name]}
+    </span>
+  );
+}
+
+function Field({ id, label, className = "", errors, children }) {
+  return (
+    <div className={`field ${className}`}>
+      <label htmlFor={id}>{label}</label>
+      {children}
+      <FieldError name={id} errors={errors} />
+    </div>
+  );
+}
+
+const invalid = (name, errors) =>
+  errors[name] ? { "aria-invalid": true, "aria-describedby": `${name}-error` } : {};
+
+function Segmented({ label, name, options, value, onChange }) {
+  return (
+    <fieldset className="field">
+      <legend>{label}</legend>
+      <div className="seg">
+        {options.map((o) => (
+          <label key={o} className={`seg-btn ${value === o ? "on" : ""}`}>
+            <input type="radio" className="sr-only" name={name} value={o}
+              checked={value === o} onChange={() => onChange(o)} />
+            {o}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel }) {
   const [form, setForm] = useState(() => ({
@@ -138,78 +314,102 @@ export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel })
     topic: defaultTopic ?? "",
     ...(initial ? { ...initial, url: initial.url ?? "", notes: initial.notes ?? "", minutes: initial.minutes ?? "" } : {}),
   }));
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState({});
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [custom, setCustom] = useState(false);
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const ref = useRef(null);
+
+  const update = (patch) => {
+    setForm((f) => ({ ...f, ...patch }));
+    setErrors((e) => {
+      const next = { ...e };
+      for (const k in patch) delete next[k];
+      return next;
+    });
+  };
+  const set = (k) => (e) => update({ [k]: e.target.value });
 
   async function submit(e) {
     e.preventDefault();
-    setError("");
-    if (!form.topic.trim()) return setError("Pick a topic.");
+    const found = validate(form);
+    setErrors(found);
+    setFormError("");
+    if (Object.keys(found).length) {
+      requestAnimationFrame(() =>
+        ref.current?.querySelector('[aria-invalid="true"], [data-invalid="true"] button')?.focus());
+      return;
+    }
+    setSaving(true);
     try {
       await onSave(form);
       if (!initial) setForm({ ...EMPTY, solved_on: form.solved_on, topic: form.topic });
     } catch (err) {
-      setError(err.message);
+      setFormError(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
   const allTopics = [...new Set([...DEFAULT_TOPICS, ...topics])];
 
   return (
-    <form className="form" onSubmit={submit}>
+    <form className="form" onSubmit={submit} noValidate ref={ref}>
       <div className="grid2">
-        <label className="span2">Problem
-          <input value={form.title} onChange={set("title")} placeholder="e.g. Two Sum" required />
-        </label>
-        <div className="field span2">Topic
-          <div className="chips">
+        <Field id="title" label="Problem" className="span2" errors={errors}>
+          <input id="title" value={form.title} onChange={set("title")} placeholder="e.g. Two Sum" {...invalid("title", errors)} />
+        </Field>
+        <fieldset className="field span2">
+          <legend>Topic</legend>
+          <div className="chips" data-invalid={!!errors.topic && !custom}
+            aria-describedby={errors.topic ? "topic-error" : undefined}>
             {allTopics.map((t) => (
-              <button type="button" key={t} className={`chip ${!custom && form.topic === t ? "on" : ""}`}
-                onClick={() => { setCustom(false); setForm({ ...form, topic: t }); }}>{t}</button>
+              <button type="button" key={t} aria-pressed={!custom && form.topic === t}
+                className={`chip ${!custom && form.topic === t ? "on" : ""}`}
+                onClick={() => { setCustom(false); update({ topic: t }); }}>{t}</button>
             ))}
-            <button type="button" className={`chip ${custom ? "on" : ""}`}
-              onClick={() => { setCustom(true); setForm({ ...form, topic: "" }); }}>+ Other</button>
+            <button type="button" aria-pressed={custom} className={`chip ${custom ? "on" : ""}`}
+              onClick={() => { setCustom(true); update({ topic: "" }); }}>+ Other</button>
           </div>
-          {custom && <input autoFocus value={form.topic} onChange={set("topic")} placeholder="New topic name" required />}
-        </div>
-        <label>Difficulty
-          <div className="seg">
-            {["Easy", "Medium", "Hard"].map((d) => (
-              <button type="button" key={d} className={`seg-btn ${form.difficulty === d ? "on" : ""}`}
-                onClick={() => setForm({ ...form, difficulty: d })}>{d}</button>
-            ))}
-          </div>
-        </label>
-        <label>Result
-          <div className="seg">
-            {["Solved", "Attempted"].map((s) => (
-              <button type="button" key={s} className={`seg-btn ${form.status === s ? "on" : ""}`}
-                onClick={() => setForm({ ...form, status: s })}>{s}</button>
-            ))}
-          </div>
-        </label>
-        <label>Minutes
-          <input type="number" min="0" value={form.minutes} onChange={set("minutes")} placeholder="25" />
-        </label>
-        <label>Date
-          <input type="date" value={form.solved_on} onChange={set("solved_on")} required />
-        </label>
-        <label className="span2">Link
-          <input value={form.url} onChange={set("url")} placeholder="https://leetcode.com/problems/…" />
-        </label>
-        <label className="span2">Notes
-          <textarea rows="2" value={form.notes} onChange={set("notes")} placeholder="Key insight, what tripped you up…" />
-        </label>
+          {custom && (
+            <input autoFocus aria-label="New topic name" value={form.topic} onChange={set("topic")}
+              placeholder="New topic name" {...invalid("topic", errors)} />
+          )}
+          <FieldError name="topic" errors={errors} />
+        </fieldset>
+        <Segmented label="Difficulty" name="difficulty" options={["Easy", "Medium", "Hard"]}
+          value={form.difficulty} onChange={(v) => update({ difficulty: v })} />
+        <Segmented label="Result" name="status" options={["Solved", "Attempted"]}
+          value={form.status} onChange={(v) => update({ status: v })} />
+        <Field id="minutes" label="Minutes" errors={errors}>
+          <input id="minutes" type="number" min="0" inputMode="numeric" value={form.minutes} onChange={set("minutes")}
+            placeholder="25" {...invalid("minutes", errors)} />
+        </Field>
+        <Field id="solved_on" label="Date" errors={errors}>
+          <input id="solved_on" type="date" value={form.solved_on} onChange={set("solved_on")} {...invalid("solved_on", errors)} />
+        </Field>
+        <Field id="url" label="Link" className="span2" errors={errors}>
+          <input id="url" type="url" value={form.url} onChange={set("url")} placeholder="https://leetcode.com/problems/…" />
+        </Field>
+        <Field id="notes" label="Notes" className="span2" errors={errors}>
+          <textarea id="notes" rows="2" value={form.notes} onChange={set("notes")} placeholder="Key insight, what tripped you up…" />
+        </Field>
       </div>
-      {error && <p className="error">{error}</p>}
+      {formError && (
+        <p className="form-error" role="alert"><AlertCircle className="icon" aria-hidden="true" />{formError}</p>
+      )}
       <div className="form-actions">
-        {onCancel && <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>}
-        <button type="submit" className="btn btn-primary">{initial ? "Save changes" : "Log problem"}</button>
+        {onCancel && <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>Cancel</button>}
+        <button type="submit" className="btn btn-primary" disabled={saving} aria-busy={saving}>
+          {saving && <span className="spinner" aria-hidden="true" />}
+          {saving ? (initial ? "Saving…" : "Logging…") : (initial ? "Save changes" : "Log problem")}
+        </button>
       </div>
     </form>
   );
 }
+
+/* ---------- history ---------- */
 
 const LEVEL = { Easy: 1, Medium: 2, Hard: 3 };
 
@@ -234,17 +434,20 @@ export function Status({ value }) {
   );
 }
 
-export function ProblemTable({ problems, onEdit, onDelete }) {
-  if (!problems.length) return <p className="muted empty">Nothing here yet.</p>;
+export function ProblemTable({ problems, editingId, onEdit, onDelete }) {
   return (
     <div className="table-wrap">
       <table>
         <thead>
-          <tr><th>Date</th><th>Problem</th><th>Topic</th><th>Difficulty</th><th>Result</th><th>Min</th><th /></tr>
+          <tr>
+            <th>Date</th><th>Problem</th><th>Topic</th><th>Difficulty</th><th>Result</th><th>Min</th>
+            <th><span className="sr-only">Actions</span></th>
+          </tr>
         </thead>
         <tbody>
           {problems.map((p) => (
-            <tr key={p.id}>
+            <tr key={p.id} className={p.id === editingId ? "editing" : undefined}
+              aria-current={p.id === editingId ? "true" : undefined}>
               <td className="date">{p.solved_on}</td>
               <td>
                 {p.url ? <a href={p.url} target="_blank" rel="noreferrer">{p.title}</a> : p.title}
@@ -255,13 +458,29 @@ export function ProblemTable({ problems, onEdit, onDelete }) {
               <td><Status value={p.status} /></td>
               <td className="minutes">{p.minutes ?? "—"}</td>
               <td className="row-actions">
-                <button className="link-btn" onClick={() => onEdit(p)}>Edit</button>
-                <button className="link-btn danger" onClick={() => onDelete(p)}>Delete</button>
+                <button type="button" className="icon-btn" title="Edit" aria-label={`Edit ${p.title}`} onClick={() => onEdit(p)}>
+                  <Pencil className="icon" aria-hidden="true" />
+                </button>
+                <button type="button" className="icon-btn danger" title="Delete" aria-label={`Delete ${p.title}`} onClick={() => onDelete(p)}>
+                  <Trash2 className="icon" aria-hidden="true" />
+                </button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+export function TableSkeleton({ rows = 5 }) {
+  return (
+    <div className="sk-table" aria-busy="true" aria-label="Loading history">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="sk-row">
+          <Skeleton className="sk-line sk-date" /><Skeleton className="sk-line" /><Skeleton className="sk-line sk-short" />
+        </div>
+      ))}
     </div>
   );
 }
