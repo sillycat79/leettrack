@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
-import { Heatmap, ProblemForm, ProblemTable, StatTile, WeakTopics } from "./components.jsx";
+import { Heatmap, Hero, ProblemForm, ProblemTable, WeakTopics } from "./components.jsx";
 
 export default function App() {
   const [problems, setProblems] = useState([]);
@@ -8,7 +8,9 @@ export default function App() {
   const [topics, setTopics] = useState([]);
   const [filters, setFilters] = useState({ q: "", topic: "", difficulty: "", status: "" });
   const [editing, setEditing] = useState(null);
+  const [practice, setPractice] = useState(null);
   const [error, setError] = useState("");
+  const formRef = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -24,41 +26,37 @@ export default function App() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   const create = async (p) => { await api.create(p); refresh(); };
   const save = async (p) => { await api.update(editing.id, p); setEditing(null); refresh(); };
   const remove = async (p) => {
     if (confirm(`Delete "${p.title}"?`)) { await api.remove(p.id); refresh(); }
   };
+  const startPractice = (topic) => { setEditing(null); setPractice(topic); scrollToForm(); };
   const setFilter = (k) => (e) => setFilters({ ...filters, [k]: e.target.value });
-
-  const rate = stats?.total ? Math.round((stats.solved / stats.total) * 100) : 0;
 
   return (
     <div className="page">
       <header className="top">
-        <h1><span className="logo">{"</>"}</span> LeetTrack</h1>
+        <h1 className="brand">leettrack<span className="dot">.</span></h1>
+        <span className="top-meta">
+          {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+        </span>
       </header>
 
-      {error && <div className="banner">{error}</div>}
+      {error && <div className="banner" role="alert">{error}</div>}
 
-      {stats && (
-        <section className="tiles">
-          <StatTile label="Solved" value={stats.solved} sub={`${rate}% of ${stats.total} attempts`} />
-          <StatTile label="Current streak" value={`${stats.streak.current}d`} sub={`Best: ${stats.streak.longest}d`} />
-          <StatTile label="Easy / Med / Hard" value={
-            <span className="mono">
-              <span className="c-easy">{stats.byDifficulty.Easy}</span> / <span className="c-medium">{stats.byDifficulty.Medium}</span> / <span className="c-hard">{stats.byDifficulty.Hard}</span>
-            </span>} />
-          <StatTile label="Topics covered" value={stats.topics.length} />
-        </section>
-      )}
+      {stats && <Hero stats={stats} onPractice={startPractice} />}
 
       <div className="layout">
-        <section className="card">
-          <h2>{editing ? "Edit problem" : "Log a problem"}</h2>
+        <section className="card" ref={formRef}>
+          <div className="card-head">
+            <h2>{editing ? "Edit problem" : "Log a problem"}</h2>
+          </div>
           <ProblemForm
-            key={editing?.id ?? "new"}
+            key={editing?.id ?? `new-${practice ?? ""}`}
             initial={editing}
+            defaultTopic={practice}
             topics={topics}
             onSave={editing ? save : create}
             onCancel={editing ? () => setEditing(null) : null}
@@ -67,13 +65,18 @@ export default function App() {
 
         <aside className="side">
           <section className="card">
-            <h2>Activity</h2>
-            <Heatmap perDay={stats?.perDay ?? {}} />
+            <div className="card-head">
+              <h2>Weakest topics</h2>
+              <p className="hint">Scored 0–100 from fail rate and time spent, adjusted for difficulty.</p>
+            </div>
+            <WeakTopics topics={stats?.topics ?? []} />
           </section>
           <section className="card">
-            <h2>Weakest topics</h2>
-            <p className="hint">Ranked by fail rate and time spent, adjusted for difficulty.</p>
-            <WeakTopics topics={stats?.topics ?? []} />
+            <div className="card-head">
+              <h2>Activity</h2>
+              <p className="hint">Problems logged per day, last 16 weeks.</p>
+            </div>
+            <Heatmap perDay={stats?.perDay ?? {}} />
           </section>
         </aside>
       </div>
@@ -82,7 +85,7 @@ export default function App() {
         <div className="list-head">
           <h2>History</h2>
           <div className="filters">
-            <input placeholder="Search…" value={filters.q} onChange={setFilter("q")} />
+            <input placeholder="Search problems" value={filters.q} onChange={setFilter("q")} />
             <select value={filters.topic} onChange={setFilter("topic")}>
               <option value="">All topics</option>
               {topics.map((t) => <option key={t}>{t}</option>)}
@@ -97,7 +100,7 @@ export default function App() {
             </select>
           </div>
         </div>
-        <ProblemTable problems={problems} onEdit={(p) => { setEditing(p); window.scrollTo({ top: 0, behavior: "smooth" }); }} onDelete={remove} />
+        <ProblemTable problems={problems} onEdit={(p) => { setEditing(p); scrollToForm(); }} onDelete={remove} />
       </section>
     </div>
   );
