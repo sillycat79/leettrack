@@ -6,7 +6,7 @@ I built this to track my LeetCode / OA practice. I log every problem I do (topic
 
 ![LeetTrack history](docs/history.png)
 
-<!-- Live demo: add your Render link here once it's deployed -->
+**Live demo:** https://leettrack-k8v3.onrender.com/
 
 **Stack:** React + Vite, Node/Express, SQLite (`node:sqlite`), tested with `node:test`
 
