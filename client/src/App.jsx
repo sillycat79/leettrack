@@ -3,7 +3,7 @@ import { AlertCircle } from "lucide-react";
 import { api } from "./api.js";
 import {
   EmptyState, Heatmap, Hero, HeroSkeleton, ListSkeleton, ProblemForm, ProblemTable,
-  Skeleton, TableSkeleton, Toasts, WeakTopics,
+  ShortcutHelp, Skeleton, TableSkeleton, Toasts, WeakTopics, prefersReducedMotion,
 } from "./components.jsx";
 
 const NO_FILTERS = { q: "", topic: "", difficulty: "", status: "" };
@@ -21,7 +21,9 @@ export default function App() {
   const [practice, setPractice] = useState(null);
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState([]);
+  const [help, setHelp] = useState(false);
   const formRef = useRef(null);
+  const searchRef = useRef(null);
 
   const loadStats = useCallback(async () => {
     const [s, t] = await Promise.all([api.stats(), api.topics()]);
@@ -49,12 +51,10 @@ export default function App() {
     return () => clearTimeout(id);
   }, [query]);
 
+  const streakDays = stats?.streak.current ?? 0;
   useEffect(() => {
-    if (!editing) return;
-    const onKey = (e) => { if (e.key === "Escape") setEditing(null); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [editing]);
+    document.title = streakDays ? `LeetTrack · ${streakDays} day streak` : "LeetTrack";
+  }, [streakDays]);
 
   const dismiss = useCallback((id) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
   const toast = useCallback((t) => {
@@ -64,9 +64,41 @@ export default function App() {
   }, [dismiss]);
 
   const focusForm = () => {
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    formRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
     requestAnimationFrame(() => formRef.current?.querySelector("input")?.focus({ preventScroll: true }));
   };
+  const closeHelp = useCallback(() => setHelp(false), []);
+
+  // N: log a problem · /: search · ?: shortcut list · Esc: close help, then cancel edit.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        if (help) setHelp(false);
+        else if (editing) setEditing(null);
+        else if (e.target.matches?.("input, textarea, select")) e.target.blur(); // frees N, / and ?
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const typing = e.target.closest?.(
+        'input:not([type="radio"]):not([type="checkbox"]), textarea, select, [contenteditable="true"]');
+      if (typing) return;
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        setHelp(false);
+        if (editing) setEditing(null);
+        focusForm();
+      } else if (e.key === "/") {
+        e.preventDefault();
+        setHelp(false);
+        searchRef.current?.focus();
+      } else if (e.key === "?") {
+        e.preventDefault();
+        setHelp((h) => !h);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const create = async (p) => {
     await api.create(p);
@@ -126,9 +158,12 @@ export default function App() {
     <div className="page">
       <header className="top">
         <h1 className="brand">leettrack<span className="dot">.</span></h1>
-        <span className="top-meta">
-          {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-        </span>
+        <div className="top-right">
+          <span className="top-meta">
+            {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+          </span>
+          <ShortcutHelp open={help} onToggle={() => setHelp((h) => !h)} onClose={closeHelp} />
+        </div>
       </header>
 
       {error && (
@@ -179,7 +214,7 @@ export default function App() {
         <div className="list-head">
           <h2>History</h2>
           <div className="filters">
-            <input type="search" aria-label="Search problems" placeholder="Search problems"
+            <input ref={searchRef} type="search" aria-label="Search problems" placeholder="Search problems"
               value={query} onChange={(e) => setQuery(e.target.value)} />
             <select aria-label="Filter by topic" value={filters.topic} onChange={setFilter("topic")}>
               <option value="">All topics</option>

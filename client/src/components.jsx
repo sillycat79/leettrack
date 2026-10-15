@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, Pencil, RotateCcw, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Check, Keyboard, Pencil, RotateCcw, Trash2, X } from "lucide-react";
 import { localDate } from "./api.js";
 
 export const DEFAULT_TOPICS = [
@@ -11,6 +11,42 @@ export const DEFAULT_TOPICS = [
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const longDate = (key) =>
   new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+
+/* ---------- motion ---------- */
+
+export const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const COUNT_MS = 450;
+
+/** Animates from the previous value to the new one. First render shows the value as-is. */
+function useCountUp(value) {
+  const [shown, setShown] = useState(value);
+  const current = useRef(value);
+  useEffect(() => {
+    const from = current.current;
+    if (from === value) return;
+    if (prefersReducedMotion()) {
+      current.current = value;
+      setShown(value);
+      return;
+    }
+    const t0 = performance.now();
+    let raf;
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / COUNT_MS);
+      const v = Math.round(from + (value - from) * (1 - (1 - k) ** 3)); // ease-out cubic
+      current.current = v;
+      setShown(v);
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return shown;
+}
+
+export const Num = ({ value }) => useCountUp(value);
 
 /* ---------- feedback primitives ---------- */
 
@@ -50,6 +86,61 @@ export function Toasts({ toasts, onDismiss }) {
   );
 }
 
+/* ---------- keyboard shortcuts ---------- */
+
+const SHORTCUTS = [
+  [["N"], "Log a problem"],
+  [["/"], "Search history"],
+  [["Esc"], "Cancel edit or close"],
+  [["←", "→", "↑", "↓"], "Browse activity"],
+  [["?"], "Show this list"],
+];
+
+export function ShortcutHelp({ open, onToggle, onClose }) {
+  const panel = useRef(null);
+  const button = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    panel.current?.focus();
+    const onDown = (e) => {
+      if (!panel.current?.contains(e.target) && !button.current?.contains(e.target)) onClose();
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open, onClose]);
+
+  const closeFromPanel = (e) => {
+    if (e.key !== "Escape") return;
+    e.stopPropagation();
+    onClose();
+    button.current?.focus();
+  };
+
+  return (
+    <div className="help">
+      <button ref={button} type="button" className="icon-btn" aria-label="Keyboard shortcuts"
+        aria-expanded={open} aria-controls="shortcut-help" title="Keyboard shortcuts (?)" onClick={onToggle}>
+        <Keyboard className="icon" aria-hidden="true" />
+      </button>
+      {open && (
+        <div id="shortcut-help" ref={panel} className="popover" role="dialog" aria-label="Keyboard shortcuts"
+          tabIndex={-1} onKeyDown={closeFromPanel}>
+          <p className="popover-title">Keyboard shortcuts</p>
+          <dl className="shortcuts">
+            {SHORTCUTS.map(([keys, label]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{keys.map((k) => <kbd key={k}>{k}</kbd>)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------- summary ---------- */
 
 /** Streak and the next topic to practice come first; totals sit underneath. */
@@ -59,14 +150,27 @@ export function Hero({ stats, onPractice }) {
   const next = topics[0];
   const covered = new Set([...DEFAULT_TOPICS, ...topics.map((t) => t.topic)]).size;
 
+  // The one celebratory animation: pulse the streak when it goes up after a log.
+  const prevStreak = useRef(streak.current);
+  const [bump, setBump] = useState(false);
+  useEffect(() => {
+    const rose = streak.current > prevStreak.current;
+    prevStreak.current = streak.current;
+    if (!rose) return;
+    setBump(true);
+    const id = setTimeout(() => setBump(false), 700);
+    return () => clearTimeout(id);
+  }, [streak.current]);
+
   return (
     <section className="hero" aria-label="Summary">
       <div className="hero-main">
         <div>
           <div className="eyebrow">Current streak</div>
-          <div className={`streak-value ${streak.current ? "" : "zero"}`}>
-            {streak.current}<span className="streak-unit">{streak.current === 1 ? "day" : "days"}</span>
+          <div className={`streak-value ${streak.current ? "" : "zero"} ${bump ? "bump" : ""}`}>
+            <span className="streak-num"><Num value={streak.current} /></span><span className="streak-unit">{streak.current === 1 ? "day" : "days"}</span>
           </div>
+          <span className="sr-only" aria-live="polite">{bump ? `Streak up to ${plural(streak.current, "day")}` : ""}</span>
           <div className="hero-meta">
             {streak.longest ? `Best ${plural(streak.longest, "day")}` : "Log a problem today to start one"}
           </div>
@@ -94,14 +198,14 @@ export function Hero({ stats, onPractice }) {
       <dl className="hero-stats">
         <div>
           <dt>Solved</dt>
-          <dd><span className="stat-value">{solved}</span><span className="stat-sub">{rate}% of {total}</span></dd>
+          <dd><span className="stat-value"><Num value={solved} /></span><span className="stat-sub"><Num value={rate} />% of <Num value={total} /></span></dd>
         </div>
         <div>
           <dt>By difficulty</dt>
           <dd className="split">
             {["Easy", "Medium", "Hard"].map((d) => (
               <span key={d}>
-                <span className="stat-value">{byDifficulty[d]}</span>
+                <span className="stat-value"><Num value={byDifficulty[d]} /></span>
                 <span className="stat-sub">{d === "Medium" ? "Med" : d}</span>
               </span>
             ))}
@@ -109,7 +213,7 @@ export function Hero({ stats, onPractice }) {
         </div>
         <div>
           <dt>Topics covered</dt>
-          <dd><span className="stat-value">{topics.length}</span><span className="stat-sub">of {covered}</span></dd>
+          <dd><span className="stat-value"><Num value={topics.length} /></span><span className="stat-sub">of {covered}</span></dd>
         </div>
       </dl>
     </section>
@@ -254,6 +358,16 @@ export function ListSkeleton({ rows = 4 }) {
 
 /* ---------- form ---------- */
 
+// Last difficulty + topic used, so the next log starts where the last one left off.
+const PREFS_KEY = "leettrack:form-defaults";
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) ?? {}; } catch { return {}; }
+}
+function savePrefs(prefs) {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* private mode: skip */ }
+}
+let autofocused = false; // only on first load, so cancelling an edit doesn't yank focus
+
 const EMPTY = {
   title: "", url: "", topic: "", difficulty: "Medium",
   status: "Solved", minutes: "", notes: "", solved_on: "",
@@ -308,17 +422,27 @@ function Segmented({ label, name, options, value, onChange }) {
 }
 
 export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel }) {
-  const [form, setForm] = useState(() => ({
+  const [form, setForm] = useState(() => {
+    const prefs = initial ? {} : loadPrefs();
+    return {
     ...EMPTY,
     solved_on: localDate(),
-    topic: defaultTopic ?? "",
+    difficulty: ["Easy", "Medium", "Hard"].includes(prefs.difficulty) ? prefs.difficulty : EMPTY.difficulty,
+    topic: defaultTopic ?? prefs.topic ?? "",
     ...(initial ? { ...initial, url: initial.url ?? "", notes: initial.notes ?? "", minutes: initial.minutes ?? "" } : {}),
-  }));
+    };
+  });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [custom, setCustom] = useState(false);
   const ref = useRef(null);
+
+  useEffect(() => {
+    if (initial || autofocused || !window.matchMedia("(pointer: fine)").matches) return;
+    autofocused = true;
+    ref.current?.querySelector("#title")?.focus({ preventScroll: true });
+  }, [initial]);
 
   const update = (patch) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -343,7 +467,10 @@ export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel })
     setSaving(true);
     try {
       await onSave(form);
-      if (!initial) setForm({ ...EMPTY, solved_on: form.solved_on, topic: form.topic });
+      if (!initial) {
+        savePrefs({ difficulty: form.difficulty, topic: form.topic.trim() });
+        setForm({ ...EMPTY, solved_on: form.solved_on, topic: form.topic, difficulty: form.difficulty });
+      }
     } catch (err) {
       setFormError(err.message);
     } finally {
@@ -351,7 +478,8 @@ export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel })
     }
   }
 
-  const allTopics = [...new Set([...DEFAULT_TOPICS, ...topics])];
+  // A remembered custom topic may not be in the list yet; show it so it's visibly selected.
+  const allTopics = [...new Set([...DEFAULT_TOPICS, ...topics, ...(!custom && form.topic ? [form.topic] : [])])];
 
   return (
     <form className="form" onSubmit={submit} noValidate ref={ref}>
