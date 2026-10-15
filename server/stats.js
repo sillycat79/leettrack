@@ -151,6 +151,16 @@ export function reviewQueue(problems, today = fmt(new Date())) {
   return { due, upcoming };
 }
 
+/** This Monday-to-Sunday week and how many problems were logged in it (every attempt counts). */
+export function weekProgress(problems, today = fmt(new Date())) {
+  const t = toDate(today);
+  const monday = new Date(t - ((t.getUTCDay() + 6) % 7) * DAY);
+  const start = fmt(monday);
+  const end = fmt(new Date(monday.getTime() + 6 * DAY));
+  const count = problems.filter((p) => p.solved_on >= start && p.solved_on <= end).length;
+  return { start, end, count };
+}
+
 export function summary(problems, today) {
   // Count each problem once: retries add rows, but solving 3Sum twice is still one problem.
   const solvedDifficulty = new Map();
@@ -172,5 +182,6 @@ export function summary(problems, today) {
     streak: streaks(problems.map((p) => p.solved_on), today),
     topics: topicStats(problems),
     perDay,
+    week: weekProgress(problems, today),
   };
 }

@@ -22,4 +22,8 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_problems_date  ON problems(solved_on);
   CREATE INDEX IF NOT EXISTS idx_problems_topic ON problems(topic);
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);

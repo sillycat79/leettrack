@@ -86,6 +86,25 @@ app.get("/api/review", (req, res) => {
   res.json(reviewQueue(all, req.query.today));
 });
 
+const DEFAULT_WEEKLY_GOAL = 10;
+
+function getSettings() {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'weekly_goal'").get();
+  return { weeklyGoal: row ? Number(row.value) : DEFAULT_WEEKLY_GOAL };
+}
+
+app.get("/api/settings", (_req, res) => res.json(getSettings()));
+
+app.put("/api/settings", (req, res) => {
+  const goal = req.body?.weeklyGoal;
+  if (!Number.isInteger(goal) || goal < 1 || goal > 50) {
+    return res.status(400).json({ errors: ["Pick a number from 1 to 50."] });
+  }
+  db.prepare(`INSERT INTO settings (key, value) VALUES ('weekly_goal', ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(String(goal));
+  res.json(getSettings());
+});
+
 app.get("/api/topics", (_req, res) => {
   res.json(db.prepare("SELECT DISTINCT topic FROM problems ORDER BY topic").all().map((r) => r.topic));
 });

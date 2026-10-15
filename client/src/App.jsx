@@ -21,6 +21,7 @@ export default function App() {
   const [practice, setPractice] = useState(null);
   const [retrying, setRetrying] = useState(null);
   const [review, setReview] = useState(null);
+  const [settings, setSettings] = useState({ weeklyGoal: 10 });
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState([]);
   const [help, setHelp] = useState(false);
@@ -28,10 +29,11 @@ export default function App() {
   const searchRef = useRef(null);
 
   const loadStats = useCallback(async () => {
-    const [s, t, r] = await Promise.all([api.stats(), api.topics(), api.review()]);
+    const [s, t, r, g] = await Promise.all([api.stats(), api.topics(), api.review(), api.settings()]);
     setStats(s);
     setTopics(t);
     setReview(r);
+    setSettings(g);
   }, []);
   const loadList = useCallback(async () => setProblems(await api.list(filters)), [filters]);
 
@@ -109,6 +111,10 @@ export default function App() {
     await api.create(p);
     toast({ message: `Logged ${p.title.trim()}` });
     refreshAll();
+  };
+  const saveGoal = async (weeklyGoal) => {
+    setSettings(await api.saveSettings({ weeklyGoal }));
+    toast({ message: `Weekly goal set to ${weeklyGoal}` });
   };
   const logRetry = async (p) => {
     await api.create(p);
@@ -189,7 +195,8 @@ export default function App() {
         </div>
       )}
 
-      {stats ? <Hero stats={stats} review={review} onPractice={startPractice} onRetry={startRetry} /> : loading && <HeroSkeleton />}
+      {stats ? <Hero stats={stats} review={review} goal={settings.weeklyGoal} onSaveGoal={saveGoal}
+        onPractice={startPractice} onRetry={startRetry} /> : loading && <HeroSkeleton />}
 
       <div className="layout">
         <section className="card" ref={formRef}>

@@ -148,7 +148,86 @@ export function ShortcutHelp({ open, onToggle, onClose }) {
 /* ---------- summary ---------- */
 
 /** Streak and the next topic to practice come first; totals sit underneath. */
-export function Hero({ stats, review, onPractice, onRetry }) {
+/* ---------- weekly goal ---------- */
+
+const RING_R = 28;
+const RING_C = 2 * Math.PI * RING_R;
+
+function GoalRing({ count, goal }) {
+  const filled = Math.min(count / goal, 1);
+  return (
+    <div className="ring" role="progressbar" aria-valuemin={0} aria-valuemax={goal}
+      aria-valuenow={Math.min(count, goal)} aria-valuetext={`${count} of ${goal} problems this week`}>
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <circle className="ring-track" cx="32" cy="32" r={RING_R} />
+        <circle className={`ring-fill ${count ? "" : "empty"}`} cx="32" cy="32" r={RING_R}
+          strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - filled)} transform="rotate(-90 32 32)" />
+      </svg>
+      <span className="ring-label" aria-hidden="true"><Num value={count} /><span>/{goal}</span></span>
+    </div>
+  );
+}
+
+export function WeekGoal({ count, goal, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(goal));
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const left = goal - count;
+  const status = left > 0 ? `${left} to go · resets Mon` : left === 0 ? "Goal met" : `${-left} over goal`;
+
+  const open = () => { setValue(String(goal)); setError(""); setEditing(true); };
+  const close = () => { setEditing(false); setError(""); };
+
+  async function submit(e) {
+    e.preventDefault();
+    const n = Number(value);
+    if (value.trim() === "" || !Number.isInteger(n) || n < 1 || n > 50) return setError("Pick a number from 1 to 50.");
+    if (n === goal) return close();
+    setSaving(true);
+    try {
+      await onSave(n);
+      close();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="goal">
+      <div className="eyebrow">This week</div>
+      <div className="goal-body">
+        <GoalRing count={count} goal={goal} />
+        <div className="goal-text">
+          <span className={`goal-status ${left <= 0 ? "met" : ""}`}>
+            {left <= 0 && <Check className="icon" strokeWidth={2.5} aria-hidden="true" />}{status}
+          </span>
+          {!editing && <button type="button" className="text-btn" onClick={open}>Edit goal</button>}
+        </div>
+      </div>
+      {editing && (
+        <form className="goal-edit" onSubmit={submit} noValidate
+          onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } }}>
+          <label className="sr-only" htmlFor="goal-input">Weekly goal</label>
+          <input id="goal-input" type="number" min="1" max="50" inputMode="numeric" autoFocus value={value}
+            onChange={(e) => { setValue(e.target.value); setError(""); }}
+            aria-invalid={error ? true : undefined} aria-describedby={error ? "goal-error" : undefined} />
+          <span className="goal-unit">per week</span>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>Save</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={close} disabled={saving}>Cancel</button>
+          {error && (
+            <span id="goal-error" className="field-error"><AlertCircle className="icon" aria-hidden="true" />{error}</span>
+          )}
+        </form>
+      )}
+    </div>
+  );
+}
+
+export function Hero({ stats, review, goal, onSaveGoal, onPractice, onRetry }) {
   const { streak, solved, solves, total, byDifficulty, topics } = stats;
   const next = topics[0];
   const dueNow = review?.due[0]; // a due review outranks the weakest topic
@@ -169,6 +248,7 @@ export function Hero({ stats, review, onPractice, onRetry }) {
   return (
     <section className="hero" aria-label="Summary">
       <div className="hero-main">
+        <div className="hero-pair">
         <div>
           <div className="eyebrow">Current streak</div>
           <div className={`streak-value ${streak.current ? "" : "zero"} ${bump ? "bump" : ""}`}>
@@ -178,6 +258,8 @@ export function Hero({ stats, review, onPractice, onRetry }) {
           <div className="hero-meta">
             {streak.longest ? `Best ${plural(streak.longest, "day")}` : "Log a problem today to start one"}
           </div>
+        </div>
+        <WeekGoal count={stats.week.count} goal={goal} onSave={onSaveGoal} />
         </div>
         <div className="hero-next">
           <div className="eyebrow">{dueNow ? "Next up · review" : "Next up"}</div>

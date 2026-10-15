@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { problemKey, reviewQueue, streaks, summary, topicStats } from "./stats.js";
+import { problemKey, reviewQueue, streaks, summary, topicStats, weekProgress } from "./stats.js";
 
 test("streaks: empty", () => {
   assert.deepEqual(streaks([], "2026-10-14"), { current: 0, longest: 0 });
@@ -152,4 +152,31 @@ test("summary: solved counts each problem once", () => {
   assert.equal(s.solved, 2);
   assert.equal(s.solves, 3);
   assert.deepEqual(s.byDifficulty, { Easy: 1, Medium: 1, Hard: 0 });
+});
+
+// ---------- weekly goal ----------
+
+test("weekProgress: weeks run Monday to Sunday", () => {
+  // 2026-10-15 is a Thursday
+  assert.deepEqual(weekProgress([], "2026-10-15"), { start: "2026-10-12", end: "2026-10-18", count: 0 });
+  assert.equal(weekProgress([], "2026-10-12").start, "2026-10-12"); // Monday is its own start
+  assert.equal(weekProgress([], "2026-10-18").start, "2026-10-12"); // Sunday closes the week
+});
+
+test("weekProgress: counts every attempt inside the week, nothing outside", () => {
+  const rows = [
+    row("A", "Solved", "2026-10-11"),    // last Sunday: previous week
+    row("B", "Solved", "2026-10-12"),    // Monday
+    row("C", "Attempted", "2026-10-14"), // attempts count too
+    row("C", "Solved", "2026-10-15"),    // and retries
+    row("D", "Solved", "2026-10-18"),    // later this week still counts
+    row("E", "Solved", "2026-10-19"),    // next Monday: next week
+  ];
+  assert.equal(weekProgress(rows, "2026-10-15").count, 4);
+});
+
+test("summary: includes this week's progress", () => {
+  const s = summary([row("A", "Solved", "2026-10-13")], "2026-10-15");
+  assert.equal(s.week.count, 1);
+  assert.equal(s.week.start, "2026-10-12");
 });

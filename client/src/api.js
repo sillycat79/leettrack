@@ -25,6 +25,8 @@ export const api = {
   stats: () => request(`/stats?today=${localDate()}`),
   topics: () => request("/topics"),
   review: () => request(`/review?today=${localDate()}`),
+  settings: () => request("/settings"),
+  saveSettings: (s) => request("/settings", { method: "PUT", body: JSON.stringify(s) }),
 };
 
 export function localDate(d = new Date()) {
