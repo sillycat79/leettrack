@@ -63,6 +63,14 @@ textarea { resize: vertical; }
 .seg-btn.easy.on { border-color: var(--easy); background: #15281a; }
 .seg-btn.medium.on { border-color: var(--medium); background: #2b2614; }
 .seg-btn.hard.on { border-color: var(--hard); background: #2e1716; }
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 999px; padding: 5px 11px; cursor: pointer; font: inherit; font-size: 12px;
+}
+.chip:hover { color: var(--text); }
+.chip.on { color: var(--text); border-color: var(--accent); background: #2a2216; }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 button.primary {
   background: var(--accent); color: #1a1205; border: 0; border-radius: 7px;

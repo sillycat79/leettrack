@@ -76,11 +76,13 @@ export function ProblemForm({ initial, topics, onSave, onCancel }) {
     ...(initial ? { ...initial, url: initial.url ?? "", notes: initial.notes ?? "", minutes: initial.minutes ?? "" } : {}),
   }));
   const [error, setError] = useState("");
+  const [custom, setCustom] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   async function submit(e) {
     e.preventDefault();
     setError("");
+    if (!form.topic.trim()) return setError("Pick a topic.");
     try {
       await onSave(form);
       if (!initial) setForm({ ...EMPTY, solved_on: form.solved_on, topic: form.topic });
@@ -89,7 +91,7 @@ export function ProblemForm({ initial, topics, onSave, onCancel }) {
     }
   }
 
-  const allTopics = [...new Set([...DEFAULT_TOPICS, ...topics])].sort();
+  const allTopics = [...new Set([...DEFAULT_TOPICS, ...topics])];
 
   return (
     <form className="form" onSubmit={submit}>
@@ -97,13 +99,17 @@ export function ProblemForm({ initial, topics, onSave, onCancel }) {
         <label className="span2">Problem
           <input value={form.title} onChange={set("title")} placeholder="e.g. Two Sum" required />
         </label>
-        <label>Topic
-          <input list="topic-list" value={form.topic} onChange={set("topic")} placeholder="Pick or type" required />
-          <datalist id="topic-list">{allTopics.map((t) => <option key={t} value={t} />)}</datalist>
-        </label>
-        <label>Link
-          <input value={form.url} onChange={set("url")} placeholder="https://leetcode.com/problems/…" />
-        </label>
+        <div className="field span2">Topic
+          <div className="chips">
+            {allTopics.map((t) => (
+              <button type="button" key={t} className={`chip ${!custom && form.topic === t ? "on" : ""}`}
+                onClick={() => { setCustom(false); setForm({ ...form, topic: t }); }}>{t}</button>
+            ))}
+            <button type="button" className={`chip ${custom ? "on" : ""}`}
+              onClick={() => { setCustom(true); setForm({ ...form, topic: "" }); }}>+ Other</button>
+          </div>
+          {custom && <input autoFocus value={form.topic} onChange={set("topic")} placeholder="New topic name" required />}
+        </div>
         <label>Difficulty
           <div className="seg">
             {["Easy", "Medium", "Hard"].map((d) => (
@@ -125,6 +131,9 @@ export function ProblemForm({ initial, topics, onSave, onCancel }) {
         </label>
         <label>Date
           <input type="date" value={form.solved_on} onChange={set("solved_on")} required />
+        </label>
+        <label className="span2">Link
+          <input value={form.url} onChange={set("url")} placeholder="https://leetcode.com/problems/…" />
         </label>
         <label className="span2">Notes
           <textarea rows="2" value={form.notes} onChange={set("notes")} placeholder="Key insight, what tripped you up…" />

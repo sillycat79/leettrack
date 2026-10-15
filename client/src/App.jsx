@@ -37,7 +37,6 @@ export default function App() {
     <div className="page">
       <header className="top">
         <h1><span className="logo">{"</>"}</span> LeetTrack</h1>
-        <p className="muted">Log practice problems, keep the streak, find the weak spots.</p>
       </header>
 
       {error && <div className="banner">{error}</div>}
