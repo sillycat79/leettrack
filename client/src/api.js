@@ -24,6 +24,7 @@ export const api = {
   remove: (id) => request(`/problems/${id}`, { method: "DELETE" }),
   stats: () => request(`/stats?today=${localDate()}`),
   topics: () => request("/topics"),
+  review: () => request(`/review?today=${localDate()}`),
 };
 
 export function localDate(d = new Date()) {

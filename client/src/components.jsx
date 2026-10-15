@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, Keyboard, Pencil, RotateCcw, Trash2, X } from "lucide-react";
+import { AlertCircle, Check, Keyboard, Lock, Pencil, RotateCcw, Trash2, X } from "lucide-react";
 import { localDate } from "./api.js";
 
 export const DEFAULT_TOPICS = [
@@ -9,6 +9,10 @@ export const DEFAULT_TOPICS = [
 ];
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const shortDate = (key) =>
+  new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+export const dueLabel = (item) =>
+  item.overdueDays > 0 ? `${plural(item.overdueDays, "day")} overdue` : "due today";
 const longDate = (key) =>
   new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 
@@ -144,10 +148,10 @@ export function ShortcutHelp({ open, onToggle, onClose }) {
 /* ---------- summary ---------- */
 
 /** Streak and the next topic to practice come first; totals sit underneath. */
-export function Hero({ stats, onPractice }) {
-  const { streak, solved, total, byDifficulty, topics } = stats;
-  const rate = total ? Math.round((solved / total) * 100) : 0;
+export function Hero({ stats, review, onPractice, onRetry }) {
+  const { streak, solved, solves, total, byDifficulty, topics } = stats;
   const next = topics[0];
+  const dueNow = review?.due[0]; // a due review outranks the weakest topic
   const covered = new Set([...DEFAULT_TOPICS, ...topics.map((t) => t.topic)]).size;
 
   // The one celebratory animation: pulse the streak when it goes up after a log.
@@ -176,8 +180,21 @@ export function Hero({ stats, onPractice }) {
           </div>
         </div>
         <div className="hero-next">
-          <div className="eyebrow">Next up</div>
-          {next ? (
+          <div className="eyebrow">{dueNow ? "Next up · review" : "Next up"}</div>
+          {dueNow ? (
+            <>
+              <div className="next-topic">{dueNow.title}</div>
+              <p className="next-why">
+                {dueNow.lastStatus} {shortDate(dueNow.lastOn)} ·{" "}
+                <span className={dueNow.overdueDays > 0 ? "overdue" : ""}>{dueLabel(dueNow)}</span> · {dueNow.topic}
+              </p>
+              <div className="next-action">
+                <button type="button" className="btn btn-ghost" aria-label={`Retry ${dueNow.title}`} onClick={() => onRetry(dueNow)}>
+                  <RotateCcw className="icon" aria-hidden="true" />Retry now
+                </button>
+              </div>
+            </>
+          ) : next ? (
             <>
               <div className="next-topic">{next.topic}</div>
               <p className="next-why">
@@ -198,7 +215,10 @@ export function Hero({ stats, onPractice }) {
       <dl className="hero-stats">
         <div>
           <dt>Solved</dt>
-          <dd><span className="stat-value"><Num value={solved} /></span><span className="stat-sub"><Num value={rate} />% of <Num value={total} /></span></dd>
+          <dd>
+            <span className="stat-value"><Num value={solved} /></span>
+            <span className="stat-sub"><Num value={solves} /> {solves === 1 ? "solve" : "solves"} in <Num value={total} /> attempts</span>
+          </dd>
         </div>
         <div>
           <dt>By difficulty</dt>
@@ -321,6 +341,55 @@ export function Heatmap({ perDay, weeks = 16 }) {
   );
 }
 
+/* ---------- review queue ---------- */
+
+const REVIEW_SHOWN = 5;
+
+export function ReviewQueue({ review, activeKey, onRetry }) {
+  const [expanded, setExpanded] = useState(false);
+  const { due, upcoming } = review;
+
+  if (!due.length) {
+    const next = upcoming[0];
+    return (
+      <p className="muted">
+        {next
+          ? `All caught up. Next review: ${next.title} on ${longDate(next.dueOn)}.`
+          : "Nothing to review. Problems you mark Attempted come back here on a 1 → 3 → 7 → 14 day schedule."}
+      </p>
+    );
+  }
+
+  const shown = expanded ? due : due.slice(0, REVIEW_SHOWN);
+  return (
+    <>
+      <ul className="review">
+        {shown.map((item) => (
+          <li key={item.key} className={item.key === activeKey ? "active" : undefined}>
+            <div className="review-main">
+              <span className="review-title">{item.title}</span>
+              <span className="review-meta">
+                {item.topic} · <span className={item.overdueDays > 0 ? "overdue" : ""}>{dueLabel(item)}</span>
+              </span>
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" aria-label={`Retry ${item.title}`} onClick={() => onRetry(item)}>
+              Retry
+            </button>
+          </li>
+        ))}
+      </ul>
+      {due.length > REVIEW_SHOWN && (
+        <button type="button" className="more-btn" aria-expanded={expanded} onClick={() => setExpanded((e) => !e)}>
+          {expanded ? "Show fewer" : `+${due.length - REVIEW_SHOWN} more`}
+        </button>
+      )}
+      {upcoming[0] && (
+        <p className="review-next">Then {upcoming[0].title} on {shortDate(upcoming[0].dueOn)}</p>
+      )}
+    </>
+  );
+}
+
 /* ---------- weak topics ---------- */
 
 export function WeakTopics({ topics }) {
@@ -421,8 +490,15 @@ function Segmented({ label, name, options, value, onChange }) {
   );
 }
 
-export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel }) {
+export function ProblemForm({ initial, retry, defaultTopic, topics, onSave, onCancel }) {
   const [form, setForm] = useState(() => {
+    if (retry) {
+      // A retry is a new attempt at the same problem: same name and link, fresh everything else.
+      return {
+        ...EMPTY, solved_on: localDate(), status: "Solved",
+        title: retry.title, url: retry.url ?? "", topic: retry.topic, difficulty: retry.difficulty,
+      };
+    }
     const prefs = initial ? {} : loadPrefs();
     return {
     ...EMPTY,
@@ -439,7 +515,7 @@ export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel })
   const ref = useRef(null);
 
   useEffect(() => {
-    if (initial || autofocused || !window.matchMedia("(pointer: fine)").matches) return;
+    if (initial || retry || autofocused || !window.matchMedia("(pointer: fine)").matches) return;
     autofocused = true;
     ref.current?.querySelector("#title")?.focus({ preventScroll: true });
   }, [initial]);
@@ -467,7 +543,7 @@ export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel })
     setSaving(true);
     try {
       await onSave(form);
-      if (!initial) {
+      if (!initial && !retry) {
         savePrefs({ difficulty: form.difficulty, topic: form.topic.trim() });
         setForm({ ...EMPTY, solved_on: form.solved_on, topic: form.topic, difficulty: form.difficulty });
       }
@@ -485,7 +561,12 @@ export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel })
     <form className="form" onSubmit={submit} noValidate ref={ref}>
       <div className="grid2">
         <Field id="title" label="Problem" className="span2" errors={errors}>
-          <input id="title" value={form.title} onChange={set("title")} placeholder="e.g. Two Sum" {...invalid("title", errors)} />
+          <div className="input-wrap">
+            <input id="title" value={form.title} onChange={set("title")} placeholder="e.g. Two Sum"
+              readOnly={!!retry} aria-describedby={retry ? "title-locked" : undefined} {...invalid("title", errors)} />
+            {retry && <Lock className="icon field-lock" aria-hidden="true" />}
+          </div>
+          {retry && <span id="title-locked" className="sr-only">Locked so this retry links to your earlier attempts.</span>}
         </Field>
         <fieldset className="field span2">
           <legend>Topic</legend>
@@ -516,9 +597,15 @@ export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel })
         <Field id="solved_on" label="Date" errors={errors}>
           <input id="solved_on" type="date" value={form.solved_on} onChange={set("solved_on")} {...invalid("solved_on", errors)} />
         </Field>
-        <Field id="url" label="Link" className="span2" errors={errors}>
-          <input id="url" type="url" value={form.url} onChange={set("url")} placeholder="https://leetcode.com/problems/…" />
-        </Field>
+        {!(retry && !form.url) && (
+          <Field id="url" label="Link" className="span2" errors={errors}>
+            <div className="input-wrap">
+              <input id="url" type="url" value={form.url} onChange={set("url")} placeholder="https://leetcode.com/problems/…"
+                readOnly={!!retry} />
+              {retry && <Lock className="icon field-lock" aria-hidden="true" />}
+            </div>
+          </Field>
+        )}
         <Field id="notes" label="Notes" className="span2" errors={errors}>
           <textarea id="notes" rows="2" value={form.notes} onChange={set("notes")} placeholder="Key insight, what tripped you up…" />
         </Field>
@@ -530,7 +617,7 @@ export function ProblemForm({ initial, defaultTopic, topics, onSave, onCancel })
         {onCancel && <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>Cancel</button>}
         <button type="submit" className="btn btn-primary" disabled={saving} aria-busy={saving}>
           {saving && <span className="spinner" aria-hidden="true" />}
-          {saving ? (initial ? "Saving…" : "Logging…") : (initial ? "Save changes" : "Log problem")}
+          {saving ? (initial ? "Saving…" : "Logging…") : (initial ? "Save changes" : retry ? "Log retry" : "Log problem")}
         </button>
       </div>
     </form>

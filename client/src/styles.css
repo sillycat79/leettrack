@@ -179,7 +179,7 @@ a:hover { color: var(--accent-text); text-decoration-color: var(--accent-line); 
 .hero-stats > div { padding: var(--space-4) var(--card-pad); border-left: 1px solid var(--border); }
 .hero-stats > div:first-child { border-left: 0; }
 .hero-stats dt { color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
-.hero-stats dd { margin: var(--space-2) 0 0; display: flex; align-items: baseline; gap: var(--space-2); }
+.hero-stats dd { margin: var(--space-2) 0 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-2); }
 .stat-value { font: 400 var(--text-2xl) / var(--leading-display) var(--serif); font-variant-numeric: tabular-nums; }
 .stat-sub { color: var(--text-subtle); font: var(--text-xs) var(--mono); }
 .split { display: flex; gap: var(--space-5); }
@@ -274,6 +274,39 @@ select {
 }
 .icon-btn:hover { color: var(--text); background: var(--surface-3); }
 .icon-btn.danger:hover { color: var(--danger); }
+
+/* ==========================================================================
+   Review queue
+   ========================================================================== */
+.overdue { color: var(--warning); }
+h2.with-count { display: flex; align-items: center; gap: var(--space-2); }
+.count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px;
+  padding: 0 var(--space-2); border-radius: var(--r-full); background: var(--surface-3);
+  color: var(--text-muted); font: 500 var(--text-xs) var(--mono);
+}
+.review { list-style: none; margin: 0; padding: 0; }
+.review li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-top: 1px solid var(--border); }
+.review li:first-child { border-top: 0; padding-top: 0; }
+.review li.active .review-title { color: var(--accent-text); }
+.review-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.review-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-meta { color: var(--text-subtle); font-size: var(--text-xs); }
+.more-btn {
+  background: none; border: 0; padding: var(--space-1) 0; margin-top: var(--space-1); cursor: pointer;
+  color: var(--text-muted); font: 500 var(--text-sm) var(--sans);
+}
+.more-btn:hover { color: var(--text); }
+.review-next { margin: var(--space-3) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--border); color: var(--text-subtle); font-size: var(--text-xs); }
+
+.last-notes {
+  margin: var(--space-3) 0 0; padding-left: var(--space-3); border-left: 2px solid var(--border-strong);
+  color: var(--text-muted); font-size: var(--text-sm);
+}
+.last-notes span { display: block; color: var(--text-subtle); font-size: var(--text-xs); }
+.input-wrap { position: relative; display: flex; flex-direction: column; }
+input[readonly], input[readonly]:hover { background: transparent; border-color: var(--border); color: var(--text-muted); cursor: default; padding-right: var(--space-7); }
+.field-lock { position: absolute; right: var(--space-3); top: 50%; transform: translateY(-50%); color: var(--text-subtle); pointer-events: none; }
 
 /* ==========================================================================
    Weakest topics
@@ -457,7 +490,7 @@ kbd {
 }
 /* touch: every target at least 40px */
 @media (max-width: 640px), (pointer: coarse) {
-  .chip, .seg-btn, .icon-btn, .toast-action, .btn-sm { min-height: var(--control-h); }
+  .chip, .seg-btn, .icon-btn, .toast-action, .btn-sm, .more-btn { min-height: var(--control-h); }
   .icon-btn { width: var(--control-h); height: var(--control-h); }
 }
 

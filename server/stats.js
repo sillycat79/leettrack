@@ -77,16 +77,97 @@ export function topicStats(problems) {
   return rows.sort((a, b) => b.weakness - a.weakness);
 }
 
+/**
+ * Identifies the same problem across attempts. Uses the LeetCode slug from the URL
+ * when there is one, otherwise slugifies the title the way LeetCode does
+ * ("15. 3Sum" -> "3sum", "Pow(x, n)" -> "powx-n"), so both paths agree.
+ * Different names for the same problem ("Three Sum") still won't match.
+ */
+export function problemKey({ title = "", url }) {
+  const fromUrl = url?.match(/leetcode\.com\/problems\/([a-z0-9-]+)/i);
+  if (fromUrl) return fromUrl[1].toLowerCase();
+  return title
+    .toLowerCase()
+    .replace(/^\s*\d+\.\s*/, "")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/[\s-]+/g, "-");
+}
+
+export const REVIEW_DAYS = [1, 3, 7, 14];
+
+/** Attempts grouped by problem, oldest first (same-day ties keep insertion order). */
+function attemptsByProblem(problems) {
+  const byKey = new Map();
+  for (const p of problems) {
+    const key = problemKey(p);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(p);
+  }
+  for (const list of byKey.values()) {
+    list.sort((a, b) => a.solved_on.localeCompare(b.solved_on) || (a.id ?? 0) - (b.id ?? 0));
+  }
+  return byKey;
+}
+
+/**
+ * Spaced repetition for problems you didn't solve. After the latest Attempted,
+ * each Solved moves a problem one step along 1 -> 3 -> 7 -> 14 days; four solves
+ * in a row clears it, and any new Attempted starts it over. Early retries count.
+ */
+export function reviewQueue(problems, today = fmt(new Date())) {
+  const items = [];
+  for (const [key, list] of attemptsByProblem(problems)) {
+    const lastFail = list.findLastIndex((p) => p.status === "Attempted");
+    if (lastFail === -1) continue;
+    const step = list.length - 1 - lastFail;
+    if (step >= REVIEW_DAYS.length) continue;
+
+    const latest = list[list.length - 1];
+    const dueOn = fmt(new Date(toDate(latest.solved_on).getTime() + REVIEW_DAYS[step] * DAY));
+    items.push({
+      key,
+      title: latest.title,
+      url: latest.url,
+      topic: latest.topic,
+      difficulty: latest.difficulty,
+      lastOn: latest.solved_on,
+      lastStatus: latest.status,
+      lastNotes: [...list].reverse().find((p) => p.notes)?.notes ?? null,
+      attempts: list.length,
+      step,
+      dueOn,
+      overdueDays: Math.round((toDate(today) - toDate(dueOn)) / DAY),
+      nextIfSolved: REVIEW_DAYS[step + 1] ?? null, // null: solving it clears it
+    });
+  }
+
+  const due = items
+    .filter((i) => i.overdueDays >= 0)
+    .sort((a, b) => b.overdueDays - a.overdueDays || a.title.localeCompare(b.title));
+  const upcoming = items
+    .filter((i) => i.overdueDays < 0)
+    .sort((a, b) => a.dueOn.localeCompare(b.dueOn) || a.title.localeCompare(b.title));
+  return { due, upcoming };
+}
+
 export function summary(problems, today) {
+  // Count each problem once: retries add rows, but solving 3Sum twice is still one problem.
+  const solvedDifficulty = new Map();
+  for (const [key, list] of attemptsByProblem(problems)) {
+    const lastSolve = list.findLast((p) => p.status === "Solved");
+    if (lastSolve) solvedDifficulty.set(key, lastSolve.difficulty);
+  }
   const byDifficulty = { Easy: 0, Medium: 0, Hard: 0 };
-  for (const p of problems) if (p.status === "Solved") byDifficulty[p.difficulty]++;
+  for (const d of solvedDifficulty.values()) byDifficulty[d]++;
 
   const perDay = {};
   for (const p of problems) perDay[p.solved_on] = (perDay[p.solved_on] || 0) + 1;
 
   return {
     total: problems.length,
-    solved: problems.filter((p) => p.status === "Solved").length,
+    solved: solvedDifficulty.size,
+    solves: problems.filter((p) => p.status === "Solved").length,
     byDifficulty,
     streak: streaks(problems.map((p) => p.solved_on), today),
     topics: topicStats(problems),

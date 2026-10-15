@@ -2,7 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { db } from "./db.js";
-import { summary } from "./stats.js";
+import { reviewQueue, summary } from "./stats.js";
 
 const app = express();
 app.use(express.json());
@@ -79,6 +79,11 @@ app.delete("/api/problems/:id", (req, res) => {
 app.get("/api/stats", (req, res) => {
   const all = db.prepare("SELECT * FROM problems").all();
   res.json(summary(all, req.query.today));
+});
+
+app.get("/api/review", (req, res) => {
+  const all = db.prepare("SELECT * FROM problems").all();
+  res.json(reviewQueue(all, req.query.today));
 });
 
 app.get("/api/topics", (_req, res) => {

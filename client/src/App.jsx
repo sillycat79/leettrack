@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { api } from "./api.js";
 import {
-  EmptyState, Heatmap, Hero, HeroSkeleton, ListSkeleton, ProblemForm, ProblemTable,
+  EmptyState, Heatmap, Hero, ReviewQueue, HeroSkeleton, ListSkeleton, ProblemForm, ProblemTable,
   ShortcutHelp, Skeleton, TableSkeleton, Toasts, WeakTopics, prefersReducedMotion,
 } from "./components.jsx";
 
@@ -19,6 +19,8 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState(null);
   const [practice, setPractice] = useState(null);
+  const [retrying, setRetrying] = useState(null);
+  const [review, setReview] = useState(null);
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState([]);
   const [help, setHelp] = useState(false);
@@ -26,9 +28,10 @@ export default function App() {
   const searchRef = useRef(null);
 
   const loadStats = useCallback(async () => {
-    const [s, t] = await Promise.all([api.stats(), api.topics()]);
+    const [s, t, r] = await Promise.all([api.stats(), api.topics(), api.review()]);
     setStats(s);
     setTopics(t);
+    setReview(r);
   }, []);
   const loadList = useCallback(async () => setProblems(await api.list(filters)), [filters]);
 
@@ -63,9 +66,9 @@ export default function App() {
     setTimeout(() => dismiss(id), t.action ? 6000 : 4000);
   }, [dismiss]);
 
-  const focusForm = () => {
+  const focusForm = (field = "#title") => {
     formRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
-    requestAnimationFrame(() => formRef.current?.querySelector("input")?.focus({ preventScroll: true }));
+    requestAnimationFrame(() => formRef.current?.querySelector(field)?.focus({ preventScroll: true }));
   };
   const closeHelp = useCallback(() => setHelp(false), []);
 
@@ -75,6 +78,7 @@ export default function App() {
       if (e.key === "Escape") {
         if (help) setHelp(false);
         else if (editing) setEditing(null);
+        else if (retrying) setRetrying(null);
         else if (e.target.matches?.("input, textarea, select")) e.target.blur(); // frees N, / and ?
         return;
       }
@@ -86,6 +90,7 @@ export default function App() {
         e.preventDefault();
         setHelp(false);
         if (editing) setEditing(null);
+        if (retrying) setRetrying(null);
         focusForm();
       } else if (e.key === "/") {
         e.preventDefault();
@@ -103,6 +108,15 @@ export default function App() {
   const create = async (p) => {
     await api.create(p);
     toast({ message: `Logged ${p.title.trim()}` });
+    refreshAll();
+  };
+  const logRetry = async (p) => {
+    await api.create(p);
+    const next = p.status !== "Solved" ? "back tomorrow"
+      : retrying.nextIfSolved ? `next review in ${retrying.nextIfSolved} days`
+      : "cleared from your review list";
+    setRetrying(null);
+    toast({ message: `Logged retry of ${p.title} · ${next}` });
     refreshAll();
   };
   const save = async (p) => {
@@ -131,8 +145,9 @@ export default function App() {
     }
   };
 
-  const startPractice = (topic) => { setEditing(null); setPractice(topic); focusForm(); };
-  const startEdit = (p) => { setEditing(p); focusForm(); };
+  const startPractice = (topic) => { setEditing(null); setRetrying(null); setPractice(topic); focusForm(); };
+  const startEdit = (p) => { setRetrying(null); setEditing(p); focusForm(); };
+  const startRetry = (item) => { setEditing(null); setRetrying(item); focusForm("#minutes"); };
   const setFilter = (k) => (e) => setFilters({ ...filters, [k]: e.target.value });
   const clearFilters = () => { setQuery(""); setFilters(NO_FILTERS); };
 
@@ -174,25 +189,43 @@ export default function App() {
         </div>
       )}
 
-      {stats ? <Hero stats={stats} onPractice={startPractice} /> : loading && <HeroSkeleton />}
+      {stats ? <Hero stats={stats} review={review} onPractice={startPractice} onRetry={startRetry} /> : loading && <HeroSkeleton />}
 
       <div className="layout">
         <section className="card" ref={formRef}>
           <div className="card-head">
-            <h2>{editing ? "Edit problem" : "Log a problem"}</h2>
+            <h2>{editing ? "Edit problem" : retrying ? `Retry ${retrying.title}` : "Log a problem"}</h2>
             {editing && <p className="hint">Editing “{editing.title}”. Press Esc to cancel.</p>}
+            {retrying && (
+              <>
+                <p className="hint">Logs a new attempt. The original stays in your history. Press Esc to cancel.</p>
+                {retrying.lastNotes && <p className="last-notes"><span>Last time</span>{retrying.lastNotes}</p>}
+              </>
+            )}
           </div>
           <ProblemForm
-            key={editing?.id ?? `new-${practice ?? ""}`}
+            key={editing?.id ?? (retrying ? `retry-${retrying.key}` : `new-${practice ?? ""}`)}
             initial={editing}
+            retry={editing ? null : retrying}
             defaultTopic={practice}
             topics={topics}
-            onSave={editing ? save : create}
-            onCancel={editing ? () => setEditing(null) : null}
+            onSave={editing ? save : retrying ? logRetry : create}
+            onCancel={editing ? () => setEditing(null) : retrying ? () => setRetrying(null) : null}
           />
         </section>
 
         <aside className="side">
+          <section className="card">
+            <div className="card-head">
+              <h2 className="with-count">
+                Due for review
+                {review?.due.length > 0 && <span className="count">{review.due.length}</span>}
+              </h2>
+              <p className="hint">Problems you didn't solve come back after 1, 3, 7 and 14 days.</p>
+            </div>
+            {loading ? <ListSkeleton rows={3} /> : offline || !review ? unavailable
+              : <ReviewQueue review={review} activeKey={retrying?.key} onRetry={startRetry} />}
+          </section>
           <section className="card">
             <div className="card-head">
               <h2>Weakest topics</h2>
